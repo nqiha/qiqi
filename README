@@ -1,0 +1,120 @@
+!pip install dash
+!pip install dash-core-components
+!pip install dash-html-components
+!pip install dash plotly
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import dash
+from dash import dcc
+from dash import html
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+
+# Read the data
+data_train = pd.read_csv(r'C:\Users\user\Downloads\train.csv')
+data_test = pd.read_csv(r'C:\Users\user\Downloads\test.csv')
+
+# Preprocess the text data and create feature vectors
+vectorizer = CountVectorizer()
+X = vectorizer.fit_transform(data_train['text'])
+y = data_train['target']
+
+# Scale the feature vectors
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X.toarray())
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Train the logistic regression model
+model = LogisticRegression(max_iter=1000)
+model.fit(X_train, y_train)
+
+# Get the word probabilities
+word_probabilities = dict(zip(vectorizer.get_feature_names(), model.coef_[0]))
+
+# Sort the word probabilities in descending order
+sorted_word_probabilities = sorted(word_probabilities.items(), key=lambda x: x[1], reverse=True)
+
+# Select the top N predictive words
+top_words = 10
+top_word_probabilities = sorted_word_probabilities[:top_words]
+words, probabilities = zip(*top_word_probabilities)
+
+# Create the bar chart
+fig = go.Figure(data=[go.Bar(x=words, y=probabilities)])
+fig.update_layout(title='Top {} Predictive Words'.format(top_words), xaxis_title='Word', yaxis_title='Probability')
+
+# Create the app
+app = dash.Dash(__name__)
+
+# Define the layout
+app.layout = html.Div(children=[
+    html.H1('Twitter Disaster Classification Dashboard'),
+    html.Div(children='''
+        A dashboard to explore the Twitter disaster classification data.
+    '''),
+    dcc.Graph(
+        id='target-distribution',
+        figure=px.histogram(data_train, x='target', color='target', nbins=2, title='Target Distribution')
+    ),
+    html.Div([
+        html.H3('Graph 1 Analysis'),
+        html.P('This graph represents the distribution of targets in the Twitter disaster dataset.'),
+        html.P('From the graph, we can see that non-disaster tweets have a higher count than disaster tweets, with 4342 non-disaster tweets and 3271 disaster tweets.'),
+        html.P('The two target classes are:'),
+        html.Ul([
+            html.Li('Target 0: Non-disaster tweet'),
+            html.Li('Target 1: Disaster tweet')
+        ])
+    ]),
+    dcc.Graph(
+        id='word-counts',
+        figure=px.histogram(data_train, x='text', title='Word Counts')
+    ),
+    html.Div([
+        html.H3('Graph 2 Analysis'),
+        html.P('This graph shows the distribution of word counts in the tweets.'),
+        html.P('From the graph, we can observe the distribution of word counts and draw insights about the tweet lengths.'),
+        html.P('The tweet with the highest word count is: "Boy 11 charged with manslaughter in shooting death of Elijah Walker: The 11-year-old appeared Wednesday in a..."'),
+        html.P('The tweet with the second highest word count is: "(The Prophet (peace be upon him) said Save yourself from Hellfire even if it is by giving half a date in charity)"')
+    ]),
+    dcc.Graph(
+        id='keyword-counts',
+        figure=px.histogram(data_train, x='keyword', title='Keyword Counts')
+    ),
+    html.Div([
+        html.H3('Graph 3 Analysis'),
+        html.P('This graph visualizes the distribution of different keywords associated with the tweets.'),
+        html.P('Analyzing the graph, we can observe the frequency of different keywords and their impact on tweet classification.'),
+        html.P('The most frequent keyword in the dataset is "fatalities" with a count of 45.'),
+        html.P('The second highest counts are tied between "armageddon" and "deluge".')
+    ]),
+    dcc.Graph(
+        id='location-counts',
+        figure=px.histogram(data_train, x='location', title='Location Counts')
+    ),
+    html.Div([
+        html.H3('Graph 4 Analysis'),
+        html.P('This graph illustrates the distribution of tweet locations.'),
+        html.P('From the graph, we can analyze the geographical distribution of tweets and its relevance to disaster classification.'),
+        html.P('The most tweets originate from the USA with a count of 142.'),
+        html.P('The second highest location is New York with 71 counts.')
+    ]),
+    dcc.Graph(
+        id='predictive-words',
+        figure=fig
+    ),
+    html.Div([
+        html.H3('Graph 5 Analysis'),
+        html.P('This graph visualizes the top {} words that are often tweeted by users.'.format(top_words))
+    ])
+])
+
+# Run the app
+if __name__ == '__main__':
+    app.run_server(port=8880, debug=False)
